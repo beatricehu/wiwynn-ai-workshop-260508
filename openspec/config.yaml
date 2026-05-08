@@ -1,0 +1,105 @@
+schema: spec-driven
+
+# Project context — shown to AI when creating artifacts.
+context: |
+  ## 專案性質
+
+  這個 repo 同時是兩件事：
+
+  1. **AI 工作坊教材** — `.agents/skills/` 下的 Skills（`SKILL.md` prompt scripts）是學員練習材料；
+     `.claude/`、`.cursor/`、`.codex/`、`.gemini/`、`.github/`、`.opencode/`、`.factory/` 等資料夾
+     是指向 `.agents/skills/` 的 symlink，不要重複編輯。
+  2. **車輛管理 MVP** — `src/` 是真正的 Vite + React + TS + MSW SPA，OpenSpec change 都圍繞這個 app 進行。
+
+  ## 技術棧
+
+  - **前端**：Vite 5 + React 18 + TypeScript（嚴格模式）
+  - **UI**：TailwindCSS v3 + shadcn/ui（New York / Slate，見 `components.json`）+ lucide-react + sonner
+  - **路由**：React Router v6，搭配 `<ProtectedRoute>` / `<AdminRoute>` 守衛
+  - **表單**：React Hook Form + Zod（resolver: `@hookform/resolvers/zod`）
+  - **圖表**：Recharts（透過 shadcn `chart` wrapper）
+  - **狀態管理**：React Context（`AuthContext`）+ `useState`，**不引入** react-query / Redux / Zustand
+  - **Mock 後端**：MSW v2 service worker，handlers 依 capability 拆檔於 `src/mocks/handlers/`
+  - **測試 / Lint**：Jest（僅針對 `src/skills/**` 工作坊腳本）、ESLint（typescript-eslint + react-hooks）
+  - **Path alias**：`@` → `src/`（同時設定於 `vite.config.ts` 與 `tsconfig`）
+
+  ## 後端假設（重要）
+
+  本 MVP **永遠以 MSW in-memory mock 為後端**。所有 change 在設計 API 時：
+
+  - 在 `src/mocks/handlers/<capability>.ts` 新增或修改 handler
+  - 驗證 schema **重用** `src/lib/schemas.ts` 中的 Zod schema（前後端共用，不複製）
+  - 錯誤回應統一格式 `{ message, field? }`，透過 `src/mocks/lib/response.ts` 的 `errorResponse()` 產生
+  - 認證統一透過 `requireAuth(request, requiredRole?)` from `src/mocks/lib/auth.ts`
+  - Token 格式 `mock-token-<userId>-<role>`，由結尾匹配 role 解析（userId 可含 `-`）
+  - 資料是 in-memory（`src/mocks/db.ts`），重新整理後重置 — 設計時不要假設跨 session 持久化
+
+  除非 change 明確標題為「切換真實後端」，**不要**提議 JWT、後端伺服器、資料庫遷移等內容。
+
+  ## Capability 邊界
+
+  `openspec/specs/` 下的六個 capability 各有清楚邊界，新功能 / 修改應落在對應的 capability：
+
+  - `auth` — 登入、token、`<ProtectedRoute>` / `<AdminRoute>`、`AuthContext`、session 持久化
+  - `dashboard` — 首頁卡片與圖表（聚合統計）
+  - `vehicle-management` — 車輛 CRUD + 表單驗證 + 唯一性（plateNo）
+  - `employee-management` — 員工 CRUD + 表單驗證 + 唯一性（email）
+  - `mock-api` — MSW 基礎建設（auth helper、error envelope、in-memory db、audit log 模組）
+  - `modification-history` — `/history` 頁面 + `GET /api/history` + role-based 過濾
+
+  跨 capability 的變動（例：在 vehicle handler 內埋 audit 點）SHALL 在 proposal 的
+  `Modified Capabilities` 列出每個被觸及的 capability。
+
+  ## Audit log 不變式
+
+  動到 vehicle / employee handler 時必須維持：
+
+  - 只有**成功的 mutation**（201 / 200 / 204）SHALL 寫入 audit 事件
+  - 失敗（400 / 401 / 403 / 404 / 409）SHALL NOT 寫入
+  - `update` 若 `diff()` 結果為空陣列 SHALL NOT 寫入
+  - `recordEvent` 的 `actor` 欄位來自 `requireAuth` 回傳的 `AuthInfo`
+  - role 過濾**只在 `/api/history` handler 內執行**，前端 SHALL NOT 自行過濾
+
+  ## 程式風格與慣例
+
+  - **Conventional Commits**（中文 subject 可），例：`feat(history): 新增 /api/history endpoint`
+  - 元件檔名 `kebab-case.tsx`，元件本身 PascalCase
+  - import 一律使用 `@/` alias，不用相對路徑跨層
+  - shadcn 元件 (`src/components/ui/*`) 視為 generated，盡量不修改；需要客製化時包一層 wrapper
+  - Zod schema 與 TS 型別 **co-located 在 `src/lib/schemas.ts`**，用 `z.infer` 推導型別，不另寫 interface
+  - 顯示給使用者的訊息使用繁體中文（錯誤訊息、按鈕文字、頁面標題）
+  - 不引入新依賴除非無法用現有棧解決；新增前在 proposal `Decisions` 一節說明取捨
+
+  ## 不做的事
+
+  - 不為「未來可能用到」加 abstraction（提案 / 實作皆然）
+  - 不寫 backwards-compat shim — MSW 端可直接破壞性修改
+  - 不在 `openspec/specs/` 直接編輯主 spec — 一律走 change → archive / sync 流程
+  - 不在 commit 跳過 husky pre-commit hook（`--no-verify`）
+
+# Per-artifact rules
+rules:
+  proposal:
+    - 結構固定四節：「Why」「What Changes」「Capabilities（New / Modified）」「Impact」，全部使用繁體中文
+    - 「Why」聚焦使用者痛點與業務動機，不寫實作細節
+    - 「What Changes」用 bullet list，每點對應一個可獨立驗收的行為改動
+    - 「Capabilities」必須明列 New / Modified 的 capability 名稱（對應 `openspec/specs/` 子目錄）
+    - 「Impact」分「新增程式碼 / 修改程式碼 / 不影響 / 限制」四欄；列出具體檔案路徑而非泛稱
+    - 整份控制在 ~500 字內，超過時拆成多個 change
+  design:
+    - 結構：「Context」「Goals / Non-Goals」「Decisions」（D1, D2, ... 編號），全部使用繁體中文
+    - 每個 Decision 至少包含：決策本身、**理由**、**替代方案**（為何不採用）；視情況加「未來影響」或「取捨」
+    - 不重複 proposal 已寫過的內容；design.md 是「為何這樣設計」而非「要做什麼」
+    - 簡單的 change（無架構抉擇）可省略 design.md
+  tasks:
+    - 用編號分節（1. / 1.1 / 1.2 ...），每個葉節點是 `[ ]` checkbox
+    - 任務粒度：一個 task 是「動一個檔案的一個明確改動」，避免「重構整個 module」這類大顆粒
+    - 每個 task SHALL 點名具體檔案路徑（例 `src/mocks/handlers/history.ts`）
+    - 必含「驗證與收尾」section，至少包含 `npx tsc -b`、`npm run lint`、`npm test`、瀏覽器手動驗證
+    - 完成後勾選 `[x]`；延後 / 不做的項目保留 `[ ]` 並在後面加註理由（例：「— 延後」）
+  spec:
+    - 每個 capability 一個 `spec.md`，從 `# <capability-name>` 開始，接著 `## Purpose` 一段話
+    - Requirement 與 Scenario 使用標準關鍵字 **SHALL / SHOULD / MAY**（大寫）
+    - 結構：`### Requirement: <名稱>` → 條文 → `#### Scenario: <情境>` → `- **WHEN** ...` / `- **THEN** ...`
+    - 一個 Requirement 至少配一個 Scenario；複雜行為用多個 Scenario 拆解
+    - 描述「契約」而非「實作」— 不出現具體 React component 名、檔名、行號

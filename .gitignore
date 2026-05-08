@@ -1,3 +1,31 @@
-node_modules
+# ─── Dependencies ─────────────────────────────────
+node_modules/
+
+# ─── Build output / cache ─────────────────────────
+dist/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# ─── Env files (僅本機 / 含敏感資訊) ───────────────
+# .env.development 為共用預設值，會進版控
 .env
+.env.local
+.env.*.local
+
+# ─── 日誌與 OS 雜訊 ────────────────────────────────
+*.log
+npm-debug.log*
 .DS_Store
+Thumbs.db
+
+# ─── Editor 個人設定（共用設定請另外開白名單）──
+.idea/
+
+# ─── AI Agent 本機暫存 ────────────────────────────
+# .agents/ 是工作坊 Skills 的 source of truth，必須進版控
+# .claude / .cursor / .codex / .gemini / .github / .opencode / .factory
+# 是指向 .agents/ 的 symlink，也一起進版控
+# 但 .agents/backup/ 是本機備份，不需共享
+.agents/backup/
+.agent/

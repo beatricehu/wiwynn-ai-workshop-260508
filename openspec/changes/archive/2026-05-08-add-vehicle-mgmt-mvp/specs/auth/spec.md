@@ -1,0 +1,70 @@
+## ADDED Requirements
+
+### Requirement: 帳號密碼登入
+
+系統 SHALL 提供登入頁面，接受 `username` 與 `password` 兩個欄位，並對應後端 `POST /api/auth/login` 進行驗證。驗證成功後 SHALL 將 `{ token, user }` 寫入 `localStorage` 與 `AuthContext`，並導向 `/`（儀表板）。
+
+#### Scenario: 以 admin 身分成功登入
+
+- **WHEN** 使用者於登入頁輸入 `admin` / `admin123` 並送出
+- **THEN** 系統 SHALL 顯示載入狀態、收到成功回應後將 user 角色標記為 `admin`，並導向 `/`
+
+#### Scenario: 以 user 身分成功登入
+
+- **WHEN** 使用者於登入頁輸入 `user` / `user123` 並送出
+- **THEN** 系統 SHALL 將 user 角色標記為 `user`，並導向 `/`
+
+#### Scenario: 帳號或密碼錯誤
+
+- **WHEN** 使用者輸入不存在的帳號或錯誤的密碼並送出
+- **THEN** 系統 SHALL 顯示錯誤訊息「帳號或密碼錯誤」，且不寫入 session、不執行導向
+
+#### Scenario: 欄位未填寫
+
+- **WHEN** 使用者未填 `username` 或 `password` 即送出
+- **THEN** 系統 SHALL 於對應欄位顯示「必填」錯誤，且不發送 API 請求
+
+### Requirement: Session 持久化與自動還原
+
+系統 SHALL 在 App 啟動時讀取 `localStorage` 中的 session，若存在則寫回 `AuthContext`，使重新整理後仍維持登入狀態。
+
+#### Scenario: 已登入後重新整理頁面
+
+- **WHEN** 已登入使用者重新整理瀏覽器
+- **THEN** 系統 SHALL 自 `localStorage` 還原 session，停留於原頁面，無須重新登入
+
+#### Scenario: localStorage 無 session
+
+- **WHEN** 使用者首次造訪或清除瀏覽器資料後造訪受保護頁面
+- **THEN** 系統 SHALL 導向 `/login`
+
+### Requirement: 登出
+
+系統 SHALL 在頂部導覽列提供「登出」按鈕，點擊後 SHALL 清除 `AuthContext` 與 `localStorage` 的 session，並導向 `/login`。
+
+#### Scenario: 使用者點擊登出
+
+- **WHEN** 已登入使用者點擊登出按鈕
+- **THEN** 系統 SHALL 清除 session 並導向 `/login`
+
+### Requirement: 路由權限守衛
+
+系統 SHALL 提供 `<ProtectedRoute>` 與 `<AdminRoute>` 兩種路由守衛：
+
+- `<ProtectedRoute>`：未登入則導向 `/login`
+- `<AdminRoute>`：需登入且角色為 `admin`，否則導向 `/`
+
+#### Scenario: 未登入存取受保護頁面
+
+- **WHEN** 未登入使用者直接造訪 `/vehicles`
+- **THEN** 系統 SHALL 導向 `/login`
+
+#### Scenario: user 角色嘗試進入員工管理頁
+
+- **WHEN** 角色為 `user` 的使用者直接造訪 `/employees`
+- **THEN** 系統 SHALL 導向 `/`
+
+#### Scenario: admin 角色進入員工管理頁
+
+- **WHEN** 角色為 `admin` 的使用者造訪 `/employees`
+- **THEN** 系統 SHALL 正常顯示員工管理頁
